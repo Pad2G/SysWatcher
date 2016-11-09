@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
 using System.Text.RegularExpressions;
+using Microsoft.VisualBasic;
 
 namespace Watcher2
 {
@@ -79,22 +80,54 @@ namespace Watcher2
                 }
              } while (!copied);
         }
+
+        private string BackgroundThreadMessageBox(string text)  // invoke messagebox from main thread
+        {
+            if (this.InvokeRequired)
+            {
+                return (string)this.Invoke(new Func<string>(
+                                       () => { return Interaction.InputBox(text); }));
+            }
+            else
+            {
+                return Interaction.InputBox(text);
+            }
+        }
+
         private void fileSystemWatcher1_Created(object sender, FileSystemEventArgs e)
         {
             int count = 0;
             richTextBox1.Text += "\nCreated: " + e.FullPath;
-            Regex rgx = new Regex(@"(([012]\d)|3[01])-((0\d)|(1[012]))-\d{4} \d{2,2}-\d{2,2}-\d{2,2}$");  // check for date at the end of file
+            Regex rgx = new Regex(@"_\d{4}((0\d)|(1[012]))(([012]\d)|3[01])_\d{2,2}\d{2,2}\d{2,2}$");  // check for date at the end of file
             Match a = rgx.Match(e.FullPath.Split('.')[0]);
             if (!a.Success)
             {
-                DateTime now = new DateTime();
-                now = DateTime.Now;
-                int index = e.FullPath.IndexOf(".");
-                finalPath = e.FullPath.Substring(0, index) + " " + now.ToString().Replace('/', '-').Replace(':', '-') + e.FullPath.Substring(e.FullPath.IndexOf('.'));
+                BackgroundWorker worker = new BackgroundWorker();
+                if (checkBox2.Checked)
+                {
+                    String res = BackgroundThreadMessageBox("Nuovo nome del file "+e.FullPath+ " senza estensione: ");
+                    if (string.IsNullOrEmpty(res))
+                    {
+                        DateTime now = new DateTime();
+                        now = DateTime.Now;
+                        int index = e.FullPath.IndexOf(".");
+                        finalPath = e.FullPath.Substring(0, index) + "_" + now.ToString("yyyyMMdd_HHmmss") + e.FullPath.Substring(e.FullPath.IndexOf('.'));
+                    }
+                    else {
+                        int index = e.FullPath.LastIndexOf(@"\");
+                        finalPath = e.FullPath.Substring(0, index + 1) + res + e.FullPath.Substring(e.FullPath.IndexOf('.'));
+                    }
+                }
+                else
+                {
+                    DateTime now = new DateTime();
+                    now = DateTime.Now;
+                    int index = e.FullPath.IndexOf(".");
+                    finalPath = e.FullPath.Substring(0, index) + "_" + now.ToString("yyyyMMdd_HHmmss") + e.FullPath.Substring(e.FullPath.IndexOf('.'));
+                }
                 exePath = e.FullPath;
                 richTextBox1.Text += "\nTentativi di copia in corso...";
                 count++;
-                BackgroundWorker worker = new BackgroundWorker();
                 worker.DoWork += Worker_DoWork;
                 worker.RunWorkerAsync(count);
             }
